@@ -238,37 +238,82 @@ def readSign(img):
     text = pytesseract.image_to_string(thresh2, config='--psm 9')
     text = text.strip('\n ,./<>?;:"[]{}')
     print(text)
-    #print(len(text))
 
-image = cv2.imread('blank.png')
-cv2.imshow('blank',image)
-b_im, e_im = preproc(image)
-mask = getMask(e_im)
+    
+    for i in range(3,14):
+        print('===========')
+        
+        text = pytesseract.image_to_string(thresh2,config='--psm '+str(i))
+        try:
+            text = text.strip('\n ,./<>?;:"[]{}')
+            print(text)
+            print(i)
+        except:
+            pass
 
-test = cv2.imread('test_1.png')
-b_test, e_test = preproc(test)
-#getMatches(b_test, b_im)
-#result = matchImages(b_test, b_im)
-result = matchImages(test, image)
-cv2.imshow("result",result)
 
-result = matchImages(result, image)
-cv2.imshow("result2",result)
+def removeBackground(img):
+    ''' Attempts to remove foliage or sky from the image to remove any
+    features that could impact SIFT '''
+    t1 = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
 
-result = matchImages(result, image)
-cv2.imshow("result3",result)
+    # Values acquired by taking typical sky and foliage colours
+    # from sample and test images
+    LH = 20
+    LS = 45
+    LV = 30
+    HH = 170
+    HS = 255
+    HV = 255
 
-result = matchImages(result, image)
-cv2.imshow("result4",result)
+    lower = np.array([LH, LS, LV])
+    upper = np.array([HH, HS, HV])
 
-#print('===========')
-#print(pytesseract.image_to_string(result))
+    remove = cv2.inRange(t1, lower, upper)
+    remove = cv2.bitwise_not(remove)
 
-result = isolateSign(result, mask)
-cv2.imshow("Isolated",result)
+    final = cv2.bitwise_and(t1, t1, mask=remove)
+    final = cv2.cvtColor(final, cv2.COLOR_HSV2BGR)
+    cv2.imshow('final',final)
+    return final
 
-cv2.imshow("closed",result)
-readSign(result)
+try:
+    image = cv2.imread('blank.png')
+    cv2.imshow('blank',image)
+    b_im, e_im = preproc(image)
+    mask = getMask(e_im)
+
+    test = cv2.imread('test_6.png')
+    test = removeBackground(test)
+    
+    b_test, e_test = preproc(test)
+    getMatches(test, image)
+    #result = matchImages(b_test, b_im)
+    result = matchImages(test, image)
+    cv2.imshow("result",result)
+except:
+    print("Failed on First attempt")
+
+try:
+    result = matchImages(result, image)
+    cv2.imshow("result2",result)
+
+    result = matchImages(result, image)
+    cv2.imshow("result3",result)
+
+    result = matchImages(result, image)
+    cv2.imshow("result4",result)
+
+    #print('===========')
+    #print(pytesseract.image_to_string(result))
+
+    result = isolateSign(result, mask)
+    cv2.imshow("Isolated",result)
+
+    cv2.imshow("closed",result)
+    readSign(result)
+except:
+    print("something else went wrong")
 
 #g = cv2.cvtColor(result, cv2.COLOR_BGR2GRAY)
 
@@ -324,6 +369,12 @@ run tesseract on the resulting image
 
 
 '''
+
+"""
+sign_1: 6,7,9,10
+
+sign_3: 6, almost 8, almost 13
+"""
 
 cv2.waitKey(0)
 cv2.destroyAllWindows()
