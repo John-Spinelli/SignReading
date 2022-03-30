@@ -13,8 +13,9 @@ t5 = cv2.imread('test_5.png')
 t6 = cv2.imread('test_6.png')
 t7 = cv2.imread('test_7.png')
 
-t1 = cv2.cvtColor(t7, cv2.COLOR_BGR2HSV)
-
+t1 = cv2.cvtColor(t3, cv2.COLOR_BGR2HSV)
+t1 = cv2.medianBlur(t1,5)
+#t1 = cv2.blur(t1, (5,5))
 
 LH = 20
 LS = 45

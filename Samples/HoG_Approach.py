@@ -3,22 +3,96 @@ import numpy as np
 from matplotlib import pyplot as plt
 import imutils
 import pytesseract
+import skimage as sk
 
 pytesseract.pytesseract.tesseract_cmd = r'C:\Users\johnn\AppData\Local\Programs\Tesseract-OCR\tesseract.exe'
 
 NUM_SAMPLE = 12
-match_ratio = 0.72 #.75
-test_img = 'test_1.png'
-test_img = 'sign_6.png'
+match_ratio = 0.70 #.75
+test_img = 'test_2.png'
+#test_img = 'sign_13.png'
 
 """
-sign_1: 6,7,9,10  
-sign_2:          >>> Fail
-sign_3: 6,7,9,10  >> ??? 
-sign_4:           >> Fail
-sign_6:           >> Fail
-sign_7: 6,7,9,10
+s_1  - good, easy
+s_2  - not enough matches
+s_3  - good, easy
+s_4  - no text detected
+s_5  - bad warp
+s_6  - bad warp
+s_7  - bad warp, colour removed
+s_8  - good, despite noise
+s_9  - bad, i instead of 11
+s_10 - good
+s_11 - good
+s_12 - bad warp, not enough matches. crown is also bad
+s_13 - close, 40) instead of 401
+
+t_1 - good
+t_2 - bad warp, crop too low
 """
+
+
+def remove_noise(bin_im):
+    height, width = bin_im.shape
+
+    for row in range(1,height-1):
+        for col in range(1, width-1):
+            neighbours = bin_im[row-1,col] + bin_im[row+1,col]
+            neighbours += bin_im[row,col-1] + bin_im[row,col+1]
+            neighbours += bin_im[row+1,col-1] + bin_im[row+1,col+1]
+            neighbours += bin_im[row-1,col-1] + bin_im[row-1,col+1]
+            if neighbours < 2 and bin_im[row,col] >= 1:
+                bin_im[row,col] = 0
+    return bin_im
+
+def hog_crop(image):
+    height_o, width_o, _ = image.shape
+    image_blur = cv2.blur(image, (3,3))
+    resized_img = sk.transform.resize(image_blur, (128*4, 64*4))
+
+    #cv2.imshow('image', image)
+    #cv2.imshow('resized', resized_img)
+    fd, hog_image = sk.feature.hog(resized_img, orientations=9,
+                                   pixels_per_cell=(8,8), cells_per_block=(2,2),
+                                   visualize=True, multichannel=True)
+
+    #plt.imshow(hog_image, cmap='gray')
+    #plt.show()
+
+    #print(np.amax(hog_image))
+    #print(hog_image)
+    hog_image = hog_image * 255
+    #print(hog_image)
+
+    ret,thresh2 = cv2.threshold(hog_image,(np.amax(hog_image))*0.5,255,cv2.THRESH_BINARY)
+    thresh2 = remove_noise(thresh2)
+    cv2.imshow('result?',thresh2)
+
+    bigboys = sk.transform.resize(thresh2, (height_o, width_o))
+    #cv2.imshow('back to big', bigboys)
+
+    coords = cv2.findNonZero(bigboys)
+    x,y,w,h = cv2.boundingRect(coords)
+    c_w = int(w*0.1)
+    c_h = int(h*0.1)
+    left = x-c_w
+    right = x+w+c_w
+    top = y-c_h
+    bot = y+h+c_h
+    if left < 0:
+        left = 0
+    if right >= width_o:
+        right = width_o-1
+    if top < 0:
+        top = 0
+    if bot >= height_o:
+        bot = height_o-1
+    result = image[top:bot, left:right]
+    cv2.imshow('hogresult',result)
+    return result
+
+
+
 
 def getPrototype():
     count = 1
@@ -51,6 +125,8 @@ def getPrototype():
 ################ FUNCTIONS ################
 '''
 
+
+
 def getMask(img):
     ''' returns mask of the template image '''
     contours, hierarchy = cv2.findContours(img, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
@@ -81,10 +157,10 @@ def getMask(img):
 def preproc(img):
     ''' Return smoothed image, canny edges and grayscale '''
     blur = cv2.blur(img, (5,5))
-    cv2.imshow('blurred',blur)
+    #cv2.imshow('blurred',blur)
 
     edges = cv2.Canny(blur, 140,200)
-    cv2.imshow('canny',edges)
+    #cv2.imshow('canny',edges)
 
     return blur, edges
 
@@ -160,30 +236,40 @@ def isolateSign(image, mask):
     ''' returns just the sign from transformed image '''
     extracted = cv2.bitwise_and(image,image, mask = mask)
     kernel = np.ones((5,5),np.uint8)
-    closed = cv2.morphologyEx(extracted, cv2.MORPH_CLOSE, kernel)
-    closed = cv2.morphologyEx(closed, cv2.MORPH_CLOSE, kernel)
-    return closed
+    #closed = cv2.morphologyEx(extracted, cv2.MORPH_CLOSE, kernel)
+    #closed = cv2.morphologyEx(closed, cv2.MORPH_CLOSE, kernel)
+    return extracted
 
 def readSign(img):
-    g = cv2.cvtColor(result, cv2.COLOR_BGR2GRAY)
+    g = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
     ret,thresh2 = cv2.threshold(g,120,255,cv2.THRESH_BINARY)
     cv2.imshow('threshed',thresh2)
 
+    kernel = np.ones((7,7),np.uint8)
+    closed = cv2.morphologyEx(thresh2, cv2.MORPH_CLOSE, kernel)
+    thresh2 = cv2.morphologyEx(closed, cv2.MORPH_CLOSE, kernel)
+
+    cv2.imshow('about to read', thresh2)
+
     print('===========')
     #print(pytesseract.image_to_string(thresh2, config='--psm 9'))
 
+    syms = '\n ,./<>?;:"[]{}()'
+    lower = 'qwertyuiopasdfghjklzxcvbnm'
+    upper = lower.upper()
+    strip_chars = syms+lower+upper
+    
     text = pytesseract.image_to_string(thresh2, config='--psm 9')
-    text = text.strip('\n ,./<>?;:"[]{}()')
+    text = text.strip(strip_chars)
     print(text)
-
     
     for i in [6,7,9,10]:
         print('===========')
         
         text = pytesseract.image_to_string(thresh2,config='--psm '+str(i))
         try:
-            text = text.strip('\n ,./<>?;:"[]{}()')
+            #text = text.strip(strip_chars)
             print(text)
             print(i)
         except:
@@ -201,7 +287,7 @@ def removeBackground(img):
     # Values acquired by taking typical sky and foliage colours
     # from sample and test images
     LH = 0
-    LS = 45
+    LS = 84
     LV = 30
     HH = 255
     HS = 255
@@ -220,6 +306,11 @@ def removeBackground(img):
     cv2.imshow('background removed',final)
     return final
 
+####################################
+####################################
+####################################
+
+
 try:
     image = cv2.imread('blank.png')
     cv2.imshow('blank',image)
@@ -227,36 +318,40 @@ try:
     mask = getMask(e_im)
 
     test = cv2.imread(test_img)
+    test = hog_crop(test)
+    readSign(test)
+    print('++++++++++++++++')
     test = removeBackground(test)
-    
+
     b_test, e_test = preproc(test)
     getMatches(test, image)
     #result = matchImages(b_test, b_im)
     result = matchImages(test, image)
     cv2.imshow("result",result)
+
+    try:
+        result = matchImages(result, image)
+        cv2.imshow("result2",result)
+        '''
+        result = matchImages(result, image)
+        cv2.imshow("result3",result)
+        
+        result = matchImages(result, image)
+        cv2.imshow("result4",result)
+        '''
+        #print('===========')
+        #print(pytesseract.image_to_string(result))
+        
+        result = isolateSign(result, mask)
+        cv2.imshow("Isolated",result)
+        
+        readSign(result)
+    except:
+        print("something else went wrong")
 except:
     print("Failed on First attempt")
 
-try:
-    result = matchImages(result, image)
-    cv2.imshow("result2",result)
 
-    result = matchImages(result, image)
-    cv2.imshow("result3",result)
-
-    result = matchImages(result, image)
-    cv2.imshow("result4",result)
-
-    #print('===========')
-    #print(pytesseract.image_to_string(result))
-
-    result = isolateSign(result, mask)
-    cv2.imshow("Isolated",result)
-
-    cv2.imshow("closed",result)
-    readSign(result)
-except:
-    print("something else went wrong")
 
 #g = cv2.cvtColor(result, cv2.COLOR_BGR2GRAY)
 
