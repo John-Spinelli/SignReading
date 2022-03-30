@@ -9,7 +9,7 @@ pytesseract.pytesseract.tesseract_cmd = r'C:\Users\johnn\AppData\Local\Programs\
 
 NUM_SAMPLE = 12
 match_ratio = 0.70 #.75
-test_img = 'test_2.png'
+test_img = 'test_8.png'
 #test_img = 'sign_13.png'
 
 """
@@ -29,6 +29,12 @@ s_13 - close, 40) instead of 401
 
 t_1 - good
 t_2 - bad warp, crop too low
+t_3 - close, 40) instead of 401 >> same as s_13
+t_4 - bad warp, other sign messes up
+t_5 - bad warp, warps to other sign
+t_6 - bad warp, foliage
+t_7 - close, 40) instead of 401 >> same as t_5
+t_8 - fail
 """
 
 
