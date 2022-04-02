@@ -4,38 +4,14 @@ from matplotlib import pyplot as plt
 import imutils
 import pytesseract
 import skimage as sk
+import csv
 
 pytesseract.pytesseract.tesseract_cmd = r'C:\Users\johnn\AppData\Local\Programs\Tesseract-OCR\tesseract.exe'
 
 NUM_SAMPLE = 12
-match_ratio = 0.70 #.75
-test_img = 'test_8.png'
+#match_ratio = 0.70 #.75
+#test_img = 'test_8.png'
 #test_img = 'sign_13.png'
-
-"""
-s_1  - good, easy
-s_2  - not enough matches
-s_3  - good, easy
-s_4  - no text detected
-s_5  - bad warp
-s_6  - bad warp
-s_7  - bad warp, colour removed
-s_8  - good, despite noise
-s_9  - bad, i instead of 11
-s_10 - good
-s_11 - good
-s_12 - bad warp, not enough matches. crown is also bad
-s_13 - close, 40) instead of 401
-
-t_1 - good
-t_2 - bad warp, crop too low
-t_3 - close, 40) instead of 401 >> same as s_13
-t_4 - bad warp, other sign messes up
-t_5 - bad warp, warps to other sign
-t_6 - bad warp, foliage
-t_7 - close, 40) instead of 401 >> same as t_5
-t_8 - fail
-"""
 
 
 def remove_noise(bin_im):
@@ -72,7 +48,7 @@ def hog_crop(image):
 
     ret,thresh2 = cv2.threshold(hog_image,(np.amax(hog_image))*0.5,255,cv2.THRESH_BINARY)
     thresh2 = remove_noise(thresh2)
-    cv2.imshow('result?',thresh2)
+    #####cv2.imshow('result?',thresh2)
 
     bigboys = sk.transform.resize(thresh2, (height_o, width_o))
     #cv2.imshow('back to big', bigboys)
@@ -94,7 +70,7 @@ def hog_crop(image):
     if bot >= height_o:
         bot = height_o-1
     result = image[top:bot, left:right]
-    cv2.imshow('hogresult',result)
+    ######cv2.imshow('hogresult',result)
     return result
 
 
@@ -119,7 +95,7 @@ def getPrototype():
             #layer = matchImages(layer, template)
             layer = cannyMatch(layer,template)
             base = cv2.addWeighted(base, count/(count+1), layer, 1/(count+1), 0)
-            cv2.imshow('after '+str(i), base)
+            ########cv2.imshow('after '+str(i), base)
 
             cv2.waitKey(0)
             count += 1
@@ -156,7 +132,7 @@ def getMask(img):
     mask = np.zeros(img.shape, np.uint8)
     cv2.drawContours(mask,[max_cont],0,255,-1,)
 
-    cv2.imshow('mask',mask)
+    #######cv2.imshow('mask',mask)
     return mask        
 
 # Preprocessing of given image
@@ -171,7 +147,7 @@ def preproc(img):
     return blur, edges
 
 
-def getMatches(img1, img2):
+def getMatches(img1, img2, match_ratio):
     ''' This function just returns the number of matches for a pair
     of images. Use it to find best pair to combine '''
     # Create the SIFT detector
@@ -193,11 +169,11 @@ def getMatches(img1, img2):
 
     ''' Just for display purposes, in case you want to visualize the matches '''
     matched_img = cv2.drawMatchesKnn(img1, keys1, img2, keys2, good_match, None, flags = 2)
-    cv2.imshow('matched_img',matched_img)
+    #########cv2.imshow('matched_img',matched_img)
     ''' End Display '''
     return
 
-def matchImages(img1, img2):
+def matchImages(img1, img2, match_ratio):
     ''' This function computes the homography to transform img1
         to match with img2. Returns the transformed img1 '''
 
@@ -256,9 +232,9 @@ def readSign(img):
     closed = cv2.morphologyEx(thresh2, cv2.MORPH_CLOSE, kernel)
     thresh2 = cv2.morphologyEx(closed, cv2.MORPH_CLOSE, kernel)
 
-    cv2.imshow('about to read', thresh2)
+    ###########cv2.imshow('about to read', thresh2)
 
-    print('===========')
+    #print('===========')
     #print(pytesseract.image_to_string(thresh2, config='--psm 9'))
 
     syms = '\n ,./<>?;:"[]{}()'
@@ -267,19 +243,22 @@ def readSign(img):
     strip_chars = syms+lower+upper
     
     text = pytesseract.image_to_string(thresh2, config='--psm 9')
-    text = text.strip(strip_chars)
+    #text = text.strip(strip_chars)
+    text = text.strip()
     print(text)
     
-    for i in [6,7,9,10]:
-        print('===========')
+    #for i in [6,7,9,10]:
+        #print('===========')
         
-        text = pytesseract.image_to_string(thresh2,config='--psm '+str(i))
-        try:
+        #text = pytesseract.image_to_string(thresh2,config='--psm '+str(i))
+        #try:
             #text = text.strip(strip_chars)
-            print(text)
-            print(i)
-        except:
-            pass
+            #print(text)
+            #print(i)
+        #except:
+        #    pass
+
+    return text
 
 
 def removeBackground(img):
@@ -309,54 +288,110 @@ def removeBackground(img):
 
     final = cv2.bitwise_and(img, img, mask=remove)
     #final = cv2.cvtColor(final, cv2.COLOR_HSV2BGR)
-    cv2.imshow('background removed',final)
+    ########cv2.imshow('background removed',final)
     return final
 
 ####################################
 ####################################
 ####################################
 
+def run_test(match_thresh):
 
-try:
-    image = cv2.imread('blank.png')
-    cv2.imshow('blank',image)
-    b_im, e_im = preproc(image)
-    mask = getMask(e_im)
+    results = []
+    
+    for i in range(1,22):
+        test_img = 'sign_' + str(i) + '.png'
+        if i > 13:
+            test_img = 'test_' + str(i-13) + '.png'
+        try:
+            image = cv2.imread('blank.png')
+            #####cv2.imshow('blank',image)
+            b_im, e_im = preproc(image)
+            mask = getMask(e_im)
 
-    test = cv2.imread(test_img)
-    test = hog_crop(test)
-    readSign(test)
-    print('++++++++++++++++')
-    test = removeBackground(test)
+            test = cv2.imread(test_img)
+            test = hog_crop(test)
+            #####readSign(test)
+            #print('++++++++++++++++')
+            test = removeBackground(test)
 
-    b_test, e_test = preproc(test)
-    getMatches(test, image)
-    #result = matchImages(b_test, b_im)
-    result = matchImages(test, image)
-    cv2.imshow("result",result)
+            b_test, e_test = preproc(test)
+            getMatches(test, image, match_thresh)
+            #result = matchImages(b_test, b_im)
+            result = matchImages(test, image, match_thresh)
+            ##########cv2.imshow("result",result)
 
-    try:
-        result = matchImages(result, image)
-        cv2.imshow("result2",result)
-        '''
-        result = matchImages(result, image)
-        cv2.imshow("result3",result)
-        
-        result = matchImages(result, image)
-        cv2.imshow("result4",result)
-        '''
-        #print('===========')
-        #print(pytesseract.image_to_string(result))
-        
-        result = isolateSign(result, mask)
-        cv2.imshow("Isolated",result)
-        
-        readSign(result)
-    except:
-        print("something else went wrong")
-except:
-    print("Failed on First attempt")
+            try:
+                result = matchImages(result, image, match_thresh)
+                #####cv2.imshow("result2",result)
+                '''
+                result = matchImages(result, image, match_thresh)
+                cv2.imshow("result3",result)
+                
+                result = matchImages(result, image, match_thresh)
+                cv2.imshow("result4",result)
+                '''
+                #print('===========')
+                #print(pytesseract.image_to_string(result))
+                
+                result = isolateSign(result, mask)
+                #####cv2.imshow("Isolated",result)
+                
+                text = readSign(result)
+                results.append(text)
+            except:
+                print("something else went wrong, iteration", i)
+                results.append("Fail")
+        except:
+            print("Failed on First attempt of", i)
+            results.append("Fail")
+            
+        #cv2.waitKey(0)    
 
+    return results
+
+'''###### Testing Zone #######'''
+expected  = ['69','7','83','9','2','70','17','17','11','69','7','2','401','105','12','401','401','401','64','40@','401']
+test_res = []
+
+for i in range(0,31):
+    test_res.append( run_test(0.8-i*0.01) )
+
+print(expected)
+print(test_res)
+
+with open('TEST_RESULTS','w') as f:
+    write = csv.writer(f)
+    write.writerow(expected)
+    for row in test_res:
+        write.writerow(row)
+
+'''###########################'''
+
+"""
+s_1  - good, easy
+s_2  - not enough matches
+s_3  - good, easy
+s_4  - no text detected
+s_5  - bad warp
+s_6  - bad warp
+s_7  - bad warp, colour removed
+s_8  - good, despite noise
+s_9  - bad, i instead of 11
+s_10 - good
+s_11 - good
+s_12 - bad warp, not enough matches. crown is also bad
+s_13 - close, 40) instead of 401
+
+t_1 - good
+t_2 - bad warp, crop too low
+t_3 - close, 40) instead of 401 >> same as s_13
+t_4 - bad warp, other sign messes up
+t_5 - bad warp, warps to other sign
+t_6 - bad warp, foliage
+t_7 - close, 40) instead of 401 >> same as t_5
+t_8 - fail
+"""
 
 
 #g = cv2.cvtColor(result, cv2.COLOR_BGR2GRAY)
