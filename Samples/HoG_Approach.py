@@ -169,7 +169,7 @@ def getMatches(img1, img2, match_ratio):
 
     ''' Just for display purposes, in case you want to visualize the matches '''
     matched_img = cv2.drawMatchesKnn(img1, keys1, img2, keys2, good_match, None, flags = 2)
-    #########cv2.imshow('matched_img',matched_img)
+    cv2.imshow('matched_img',matched_img)
     ''' End Display '''
     return
 
@@ -217,7 +217,7 @@ def matchImages(img1, img2, match_ratio):
 def isolateSign(image, mask):
     ''' returns just the sign from transformed image '''
     extracted = cv2.bitwise_and(image,image, mask = mask)
-    kernel = np.ones((5,5),np.uint8)
+    #kernel = np.ones((5,5),np.uint8)
     #closed = cv2.morphologyEx(extracted, cv2.MORPH_CLOSE, kernel)
     #closed = cv2.morphologyEx(closed, cv2.MORPH_CLOSE, kernel)
     return extracted
@@ -226,7 +226,7 @@ def readSign(img):
     g = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
     ret,thresh2 = cv2.threshold(g,120,255,cv2.THRESH_BINARY)
-    cv2.imshow('threshed',thresh2)
+    #cv2.imshow('threshed',thresh2)
 
     kernel = np.ones((7,7),np.uint8)
     closed = cv2.morphologyEx(thresh2, cv2.MORPH_CLOSE, kernel)
@@ -237,15 +237,20 @@ def readSign(img):
     #print('===========')
     #print(pytesseract.image_to_string(thresh2, config='--psm 9'))
 
-    syms = '\n ,./<>?;:"[]{}()'
+    syms = '\n ,./<>?;:"'
     lower = 'qwertyuiopasdfghjklzxcvbnm'
     upper = lower.upper()
     strip_chars = syms+lower+upper
     
     text = pytesseract.image_to_string(thresh2, config='--psm 9')
     #text = text.strip(strip_chars)
-    text = text.strip()
-    print(text)
+    text = text.strip(strip_chars)
+    # Correct instances of ]}) as a 1
+    for index in range(len(text)):
+        if text[index] in ')}]':
+            text = text[0:index] + '1' + text[index+1:]
+        
+    #print(text)
     
     #for i in [6,7,9,10]:
         #print('===========')
@@ -258,7 +263,7 @@ def readSign(img):
         #except:
         #    pass
 
-    return text
+    return text, thresh2
 
 
 def removeBackground(img):
@@ -266,6 +271,7 @@ def removeBackground(img):
     features that could impact SIFT '''
     t1 = cv2.medianBlur(img,5)
     t1 = cv2.blur(t1, (5,5))
+    #t1 = cv2.blur(img, (5,5))
     
     t1 = cv2.cvtColor(t1, cv2.COLOR_BGR2HSV)
 
@@ -287,6 +293,7 @@ def removeBackground(img):
     remove = cv2.morphologyEx(remove, cv2.MORPH_CLOSE, kernel)
 
     final = cv2.bitwise_and(img, img, mask=remove)
+    
     #final = cv2.cvtColor(final, cv2.COLOR_HSV2BGR)
     ########cv2.imshow('background removed',final)
     return final
@@ -299,10 +306,10 @@ def run_test(match_thresh):
 
     results = []
     
-    for i in range(1,22):
+    for i in range(1,28):  # 1,28
         test_img = 'sign_' + str(i) + '.png'
-        if i > 13:
-            test_img = 'test_' + str(i-13) + '.png'
+        #if i > 13:
+        #    test_img = 'test_' + str(i-13) + '.png'
         try:
             image = cv2.imread('blank.png')
             #####cv2.imshow('blank',image)
@@ -316,55 +323,70 @@ def run_test(match_thresh):
             test = removeBackground(test)
 
             b_test, e_test = preproc(test)
-            getMatches(test, image, match_thresh)
+            #getMatches(test, image, match_thresh)######
             #result = matchImages(b_test, b_im)
             result = matchImages(test, image, match_thresh)
-            ##########cv2.imshow("result",result)
+            #cv2.imshow("result",result) ##########
 
             try:
+                prev = result
                 result = matchImages(result, image, match_thresh)
                 #####cv2.imshow("result2",result)
-                '''
-                result = matchImages(result, image, match_thresh)
-                cv2.imshow("result3",result)
                 
                 result = matchImages(result, image, match_thresh)
-                cv2.imshow("result4",result)
-                '''
-                #print('===========')
-                #print(pytesseract.image_to_string(result))
+                #cv2.imshow("result3",result)
+                
+                #result = matchImages(result, image, match_thresh)
+                #cv2.imshow("result4",result)
                 
                 result = isolateSign(result, mask)
+                cv2.imwrite('isolated_'+str(i)+'.png', result)
                 #####cv2.imshow("Isolated",result)
                 
-                text = readSign(result)
+                text, fin_img = readSign(result)
                 results.append(text)
+                cv2.imwrite('binary_'+str(i)+'.png', fin_img)
             except:
-                print("something else went wrong, iteration", i)
-                results.append("Fail")
+                #####print("something else went wrong, iteration", i)
+                result = isolateSign(prev, mask)
+                cv2.imwrite('isolated_'+str(i)+'.png', result)
+                
+                text, fin_img = readSign(prev)
+                results.append(text)
+                cv2.imwrite('binary_'+str(i)+'.png', fin_img)
+                
         except:
-            print("Failed on First attempt of", i)
+            #######print("Failed on First attempt of", i)
             results.append("Fail")
             
-        #cv2.waitKey(0)    
+        cv2.waitKey(0)    
 
     return results
 
 '''###### Testing Zone #######'''
-expected  = ['69','7','83','9','2','70','17','17','11','69','7','2','401','105','12','401','401','401','64','40@','401']
+expected  = ['69','7','83','9','2','70','17','17','11','69','7','2','401','105','12','401','400','401','64','401','400','96','7','400','35','3','89']
 test_res = []
 
-for i in range(0,31):
-    test_res.append( run_test(0.8-i*0.01) )
+best_ratio = 0.8
 
-print(expected)
-print(test_res)
+#for i in range(0,15):
+test_res.append( run_test(best_ratio) )
 
-with open('TEST_RESULTS','w') as f:
+#print(expected)
+#print(test_res)
+
+with open('TEST_RESULTS_bestmatch','w') as f:
     write = csv.writer(f)
     write.writerow(expected)
     for row in test_res:
         write.writerow(row)
+
+print("/////////////////////////////")
+print("/////////////////////////////")
+print("/////////////////////////////")
+print("/////////////////////////////")
+
+# From test results, using match ratio of 0.8, 0.7 or 0.69 yielded best accuracy
 
 '''###########################'''
 
