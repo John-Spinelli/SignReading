@@ -71,6 +71,16 @@ def hog_crop(image):
         bot = height_o-1
     result = image[top:bot, left:right]
     ######cv2.imshow('hogresult',result)
+
+    '''
+    cv2.imshow('image', image)
+    cv2.imshow('bigboys', bigboys)
+    cv2.imshow('result', result)
+
+    cv2.imwrite('_HOG_before.png', image)
+    cv2.imwrite('_HOG_small.png', bigboys)
+    cv2.imwrite('_HOG_large.png', result)
+    '''
     return result
 
 
@@ -169,7 +179,8 @@ def getMatches(img1, img2, match_ratio):
 
     ''' Just for display purposes, in case you want to visualize the matches '''
     matched_img = cv2.drawMatchesKnn(img1, keys1, img2, keys2, good_match, None, flags = 2)
-    cv2.imshow('matched_img',matched_img)
+    #cv2.imshow('matched_img',matched_img)
+    cv2.imwrite('_SIFT_matches.png',matched_img)
     ''' End Display '''
     return
 
@@ -232,10 +243,6 @@ def readSign(img):
     closed = cv2.morphologyEx(thresh2, cv2.MORPH_CLOSE, kernel)
     thresh2 = cv2.morphologyEx(closed, cv2.MORPH_CLOSE, kernel)
 
-    #rect_mask = cv2.imread('mask_rectangle.png')
-    #rect_mask = cv2.cvtColor(rect_mask, cv2.COLOR_BGR2GRAY)
-    #thresh2 = cv2.bitwise_and(thresh2,thresh2, mask=rect_mask)
-
     ###########cv2.imshow('about to read', thresh2)
 
     #print('===========')
@@ -297,7 +304,12 @@ def removeBackground(img):
     remove = cv2.morphologyEx(remove, cv2.MORPH_CLOSE, kernel)
 
     final = cv2.bitwise_and(img, img, mask=remove)
-    
+    """
+    cv2.imshow('img',img)
+    cv2.imshow('final',final)
+    cv2.imwrite('_HSV_before.png',img)
+    cv2.imwrite('_HSV_after.png',final)
+    """
     #final = cv2.cvtColor(final, cv2.COLOR_HSV2BGR)
     ########cv2.imshow('background removed',final)
     return final
@@ -310,7 +322,7 @@ def run_test(match_thresh):
 
     results = []
     
-    for i in range(1,28):  # 1,28
+    for i in range(2,3):  # 1,28
         test_img = 'sign_' + str(i) + '.png'
         #if i > 13:
         #    test_img = 'test_' + str(i-13) + '.png'
@@ -326,26 +338,32 @@ def run_test(match_thresh):
             #print('++++++++++++++++')
             test = removeBackground(test)
 
-            b_test, e_test = preproc(test)
-            #getMatches(test, image, match_thresh)######
+            cv2.imwrite('_SIFT_before.png',test)
+
+            #b_test, e_test = preproc(test)
+            getMatches(test, image, match_thresh)######
             #result = matchImages(b_test, b_im)
             result = matchImages(test, image, match_thresh)
             #cv2.imshow("result",result) ##########
+            #cv2.imwrite('_SIFT_1.png',result)
 
             try:
                 prev = result
                 result = matchImages(result, image, match_thresh)
+                #cv2.imwrite('_SIFT_2.png',result)
                 #####cv2.imshow("result2",result)
                 
                 result = matchImages(result, image, match_thresh)
+                #cv2.imwrite('_SIFT_3.png',result)
                 #cv2.imshow("result3",result)
                 
                 #result = matchImages(result, image, match_thresh)
                 #cv2.imshow("result4",result)
-                
+                cv2.imwrite("_Isolated_before.png",result)
                 result = isolateSign(result, mask)
-                cv2.imwrite('isolated_'+str(i)+'.png', result)
+                #cv2.imwrite('isolated_'+str(i)+'.png', result)
                 #####cv2.imshow("Isolated",result)
+                cv2.imwrite("_Isolated.png",result)
                 
                 text, fin_img = readSign(result)
                 results.append(text)
@@ -379,11 +397,14 @@ test_res.append( run_test(best_ratio) )
 #print(expected)
 #print(test_res)
 
+"""
+
 with open('TEST_RESULTS_bestmatch','w') as f:
     write = csv.writer(f)
     write.writerow(expected)
     for row in test_res:
         write.writerow(row)
+"""
 
 print("/////////////////////////////")
 print("/////////////////////////////")
