@@ -5,14 +5,12 @@ import imutils
 import pytesseract
 import skimage as sk
 import csv
+import warnings
+warnings.filterwarnings("ignore")
+
+NUM_SAMPLES = 54
 
 pytesseract.pytesseract.tesseract_cmd = r'C:\Users\johnn\AppData\Local\Programs\Tesseract-OCR\tesseract.exe'
-
-NUM_SAMPLE = 12
-#match_ratio = 0.70 #.75
-#test_img = 'test_8.png'
-#test_img = 'sign_13.png'
-
 
 def remove_noise(bin_im):
     height, width = bin_im.shape
@@ -130,7 +128,7 @@ def getMask(img):
 
     # Create mask from contour
     mask = np.zeros(img.shape, np.uint8)
-    cv2.drawContours(mask,[max_cont],0,255,-1,)
+    cv2.drawContours(mask,[max_cont],0,255,-1,lineType = cv2.LINE_AA)
 
     #######cv2.imshow('mask',mask)
     return mask        
@@ -222,6 +220,27 @@ def isolateSign(image, mask):
     #closed = cv2.morphologyEx(closed, cv2.MORPH_CLOSE, kernel)
     return extracted
 
+def tesseract_text(img):
+    syms = '\n ,./<>?;:"・~({[“°‘—_・|\\・-'
+    lower = 'qwertyuiopasdfghjklzxcvbnm'
+    upper = lower.upper()
+    strip_chars = syms+lower+upper
+    
+    text = pytesseract.image_to_string(img, config='--psm 9')
+    #text = text.strip(strip_chars)
+    text = text.strip(strip_chars)
+    # Correct instances of ]}) as a 1
+    for index in range(len(text)):
+        if text[index] in ')}]':
+            text = text[0:index] + '1' + text[index+1:]
+    return text
+
+def catch_failed_text(text):
+    for letter in text:
+        if ord(letter) >= 58 or ord(letter) <= 47:
+            return ''
+    return text
+
 def readSign(img):
     g = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
@@ -232,40 +251,35 @@ def readSign(img):
     closed = cv2.morphologyEx(thresh2, cv2.MORPH_CLOSE, kernel)
     thresh2 = cv2.morphologyEx(closed, cv2.MORPH_CLOSE, kernel)
 
-    #rect_mask = cv2.imread('mask_rectangle.png')
-    #rect_mask = cv2.cvtColor(rect_mask, cv2.COLOR_BGR2GRAY)
-    #thresh2 = cv2.bitwise_and(thresh2,thresh2, mask=rect_mask)
+    rect_mask = cv2.imread('mask_rectangle.png')
+    rect_mask = cv2.cvtColor(rect_mask, cv2.COLOR_BGR2GRAY)
+    thresh2 = cv2.bitwise_and(thresh2,thresh2, mask=rect_mask)
 
-    ###########cv2.imshow('about to read', thresh2)
+    coords = cv2.findNonZero(thresh2)
+    x,y,w,h = cv2.boundingRect(coords)
+    thresh2 = thresh2[y:y+h, x:x+w]
 
-    #print('===========')
-    #print(pytesseract.image_to_string(thresh2, config='--psm 9'))
-
-    syms = '\n ,./<>?;:"'
-    lower = 'qwertyuiopasdfghjklzxcvbnm'
-    upper = lower.upper()
-    strip_chars = syms+lower+upper
+    text = tesseract_text(thresh2)
+    text = catch_failed_text(text)
     
-    text = pytesseract.image_to_string(thresh2, config='--psm 9')
-    #text = text.strip(strip_chars)
-    text = text.strip(strip_chars)
-    # Correct instances of ]}) as a 1
-    for index in range(len(text)):
-        if text[index] in ')}]':
-            text = text[0:index] + '1' + text[index+1:]
+    if text == '':
+        thresh2 = cv2.Canny(thresh2, 140,200)
+        closed = cv2.morphologyEx(thresh2, cv2.MORPH_CLOSE, kernel)
+        thresh2 = cv2.morphologyEx(closed, cv2.MORPH_CLOSE, kernel)
+        text = tesseract_text(thresh2)
+        text = catch_failed_text(text)
+
+    if text == '':
         
-    #print(text)
-    
-    #for i in [6,7,9,10]:
-        #print('===========')
-        
-        #text = pytesseract.image_to_string(thresh2,config='--psm '+str(i))
-        #try:
-            #text = text.strip(strip_chars)
-            #print(text)
-            #print(i)
-        #except:
-        #    pass
+        contours, _ = cv2.findContours(thresh2, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
+        thresh2 = np.zeros(thresh2.shape, np.uint8)
+        for cont in contours:
+            #print("length:",cv2.arcLength(cont,True),"\tArea:",cv2.contourArea(cont))
+            if cv2.arcLength(cont,True) > 20 and cv2.contourArea(cont) < 80000 and cv2.contourArea(cont) > 3000: # and cv2.contourArea(cont) > 400:
+                cv2.drawContours(thresh2,[cont],0,255,-1,lineType = cv2.LINE_AA)
+                #print(">>>>>>>>length:",cv2.arcLength(cont,True),"\tArea:",cv2.contourArea(cont))
+        text = tesseract_text(thresh2)
+        text = catch_failed_text(text)
 
     return text, thresh2
 
@@ -310,7 +324,7 @@ def run_test(match_thresh):
 
     results = []
     
-    for i in range(1,28):  # 1,28
+    for i in range(1,NUM_SAMPLES+1):  # 1,28
         test_img = 'sign_' + str(i) + '.png'
         #if i > 13:
         #    test_img = 'test_' + str(i-13) + '.png'
@@ -368,7 +382,11 @@ def run_test(match_thresh):
     return results
 
 '''###### Testing Zone #######'''
-expected  = ['69','7','83','9','2','70','17','17','11','69','7','2','401','105','12','401','400','401','64','401','400','96','7','400','35','3','89']
+test_num = []
+for i in range(1,NUM_SAMPLES+1):
+    test_num.append(str(i))
+expected  = ['69','7','83','9','2','70','17','17','11','69','7','2','401','105','12','401','400','401','64','401','400','96','7','400','35','3','89',
+             '69','69','69','83','83','83','17','17','17','105','105','105','401','401','401','400','400','400','401','401','401','400','400','400','3','3','3']
 test_res = []
 
 best_ratio = 0.8
@@ -379,8 +397,9 @@ test_res.append( run_test(best_ratio) )
 #print(expected)
 #print(test_res)
 
-with open('TEST_RESULTS_bestmatch','w') as f:
+with open('TEST_RESULTS_bestmatch.txt','w') as f:
     write = csv.writer(f)
+    write.writerow(test_num)
     write.writerow(expected)
     for row in test_res:
         write.writerow(row)
